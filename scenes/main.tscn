@@ -1,0 +1,74 @@
+[gd_scene format=3 uid="uid://cxieixtcabv1g"]
+
+[ext_resource type="Script" uid="uid://b8i4phdi8vjbs" path="res://scenes/main.gd" id="1_o5qli"]
+
+[node name="Main" type="Control" unique_id=1921975385]
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_o5qli")
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=2060343011]
+
+[node name="SeekTimer" type="Timer" parent="." unique_id=1207085821]
+wait_time = 0.1
+autostart = true
+
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=1965494227]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TrackTitle" type="Label" parent="VBoxContainer" unique_id=1466204163]
+layout_mode = 2
+
+[node name="SeekBar" type="HSlider" parent="VBoxContainer" unique_id=163247811]
+layout_mode = 2
+
+[node name="TimeRow" type="HBoxContainer" parent="VBoxContainer" unique_id=142520911]
+layout_mode = 2
+
+[node name="ElapsedLabel" type="Label" parent="VBoxContainer/TimeRow" unique_id=1786082616]
+layout_mode = 2
+
+[node name="DurationLabel" type="Label" parent="VBoxContainer/TimeRow" unique_id=1419827226]
+layout_mode = 2
+
+[node name="ControlRow" type="HBoxContainer" parent="VBoxContainer" unique_id=736187376]
+layout_mode = 2
+
+[node name="PrevButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=736819717]
+layout_mode = 2
+text = "⏮"
+
+[node name="PlayPauseButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=200919605]
+layout_mode = 2
+text = "⏸"
+
+[node name="StopButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=1783972809]
+layout_mode = 2
+text = "⏹"
+
+[node name="NextButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=247787626]
+layout_mode = 2
+text = "⏭"
+
+[node name="VolumeSlider" type="HSlider" parent="VBoxContainer" unique_id=207158652]
+layout_mode = 2
+
+[connection signal="timeout" from="SeekTimer" to="." method="_on_seek_timer_timeout"]
+[connection signal="drag_ended" from="VBoxContainer/SeekBar" to="." method="_on_seek_bar_drag_ended"]
+[connection signal="drag_started" from="VBoxContainer/SeekBar" to="." method="_on_seek_bar_drag_started"]
+[connection signal="pressed" from="VBoxContainer/ControlRow/PrevButton" to="." method="_on_prev_button_pressed"]
+[connection signal="pressed" from="VBoxContainer/ControlRow/PlayPauseButton" to="." method="_on_play_pause_button_pressed"]
+[connection signal="pressed" from="VBoxContainer/ControlRow/StopButton" to="." method="_on_stop_button_pressed"]
+[connection signal="pressed" from="VBoxContainer/ControlRow/NextButton" to="." method="_on_next_button_pressed"]
+[connection signal="value_changed" from="VBoxContainer/VolumeSlider" to="." method="_on_volume_slider_value_changed"]
