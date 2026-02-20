@@ -45,30 +45,83 @@ layout_mode = 2
 [node name="ControlRow" type="HBoxContainer" parent="VBoxContainer" unique_id=736187376]
 layout_mode = 2
 
+[node name="ShuffleButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=619097382]
+layout_mode = 2
+text = "⇄"
+
 [node name="PrevButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=736819717]
 layout_mode = 2
+size_flags_horizontal = 3
 text = "⏮"
 
 [node name="PlayPauseButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=200919605]
 layout_mode = 2
+size_flags_horizontal = 3
 text = "⏸"
-
-[node name="StopButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=1783972809]
-layout_mode = 2
-text = "⏹"
 
 [node name="NextButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=247787626]
 layout_mode = 2
+size_flags_horizontal = 3
 text = "⏭"
+
+[node name="RepeatButton" type="Button" parent="VBoxContainer/ControlRow" unique_id=424200702]
+layout_mode = 2
+text = "↻"
 
 [node name="VolumeSlider" type="HSlider" parent="VBoxContainer" unique_id=207158652]
 layout_mode = 2
 
+[node name="PlaylistPanel" type="VBoxContainer" parent="VBoxContainer" unique_id=1747809357]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlaylistButtons" type="HBoxContainer" parent="VBoxContainer/PlaylistPanel" unique_id=506466265]
+layout_mode = 2
+
+[node name="AddFileButton" type="Button" parent="VBoxContainer/PlaylistPanel/PlaylistButtons" unique_id=1628354121]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "＋"
+
+[node name="AddFolderButton" type="Button" parent="VBoxContainer/PlaylistPanel/PlaylistButtons" unique_id=1711507861]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "📁"
+
+[node name="RemoveButton" type="Button" parent="VBoxContainer/PlaylistPanel/PlaylistButtons" unique_id=2086231466]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "✕"
+
+[node name="TrackList" type="ItemList" parent="VBoxContainer/PlaylistPanel" unique_id=1146219985]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="FileDialog" type="FileDialog" parent="." unique_id=384244918]
+title = "Open File(s)"
+file_mode = 1
+access = 2
+filters = PackedStringArray("*.mp3")
+
+[node name="FolderDialog" type="FileDialog" parent="." unique_id=1212661006]
+title = "Open a Directory"
+file_mode = 2
+access = 2
+
+[connection signal="finished" from="AudioStreamPlayer" to="." method="_on_next_button_pressed"]
 [connection signal="timeout" from="SeekTimer" to="." method="_on_seek_timer_timeout"]
 [connection signal="drag_ended" from="VBoxContainer/SeekBar" to="." method="_on_seek_bar_drag_ended"]
 [connection signal="drag_started" from="VBoxContainer/SeekBar" to="." method="_on_seek_bar_drag_started"]
+[connection signal="pressed" from="VBoxContainer/ControlRow/ShuffleButton" to="." method="_on_shuffle_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/ControlRow/PrevButton" to="." method="_on_prev_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/ControlRow/PlayPauseButton" to="." method="_on_play_pause_button_pressed"]
-[connection signal="pressed" from="VBoxContainer/ControlRow/StopButton" to="." method="_on_stop_button_pressed"]
 [connection signal="pressed" from="VBoxContainer/ControlRow/NextButton" to="." method="_on_next_button_pressed"]
+[connection signal="pressed" from="VBoxContainer/ControlRow/RepeatButton" to="." method="_on_repeat_button_pressed"]
 [connection signal="value_changed" from="VBoxContainer/VolumeSlider" to="." method="_on_volume_slider_value_changed"]
+[connection signal="pressed" from="VBoxContainer/PlaylistPanel/PlaylistButtons/AddFileButton" to="." method="_on_add_file_button_pressed"]
+[connection signal="pressed" from="VBoxContainer/PlaylistPanel/PlaylistButtons/AddFolderButton" to="." method="_on_add_folder_button_pressed"]
+[connection signal="pressed" from="VBoxContainer/PlaylistPanel/PlaylistButtons/RemoveButton" to="." method="_on_remove_button_pressed"]
+[connection signal="item_selected" from="VBoxContainer/PlaylistPanel/TrackList" to="." method="_on_track_list_item_selected"]
+[connection signal="files_selected" from="FileDialog" to="." method="_on_file_dialog_files_selected"]
+[connection signal="dir_selected" from="FolderDialog" to="." method="_on_folder_dialog_dir_selected"]
