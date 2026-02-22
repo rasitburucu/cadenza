@@ -63,6 +63,10 @@ func _ready() -> void:
 	minimize_btn.pressed.connect(_on_minimize)
 	close_btn.pressed.connect(_on_close)
 
+	# TopBar sürükleme
+	var topbar = $PlayerBackground/MainLayout/TopBar
+	topbar.gui_input.connect(_on_topbar_input)
+
 	# Playback
 	play_pause_btn.pressed.connect(_on_play_pause_pressed)
 	prev_btn.pressed.connect(_on_prev_pressed)
@@ -103,6 +107,13 @@ func _ready() -> void:
 
 	seek_timer.start()
 	_load_config()
+
+
+# ── Pencere sürükleme ──────────────────────────────────────────────────
+func _on_topbar_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			DisplayServer.window_start_drag()
 
 
 # ── Parça yükleme ──────────────────────────────────────────────────────

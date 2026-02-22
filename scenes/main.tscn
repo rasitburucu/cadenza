@@ -33,6 +33,10 @@
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_85g3d"]
 texture = ExtResource("4_tipki")
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yq6so"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_fv21b"]
+
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_gqmmt"]
 texture = ExtResource("18_0ld40")
 
@@ -119,6 +123,7 @@ size_flags_vertical = 4
 custom_minimum_size = Vector2(28, 28)
 layout_mode = 2
 size_flags_vertical = 4
+theme_override_styles/hover = SubResource("StyleBoxFlat_yq6so")
 icon = ExtResource("5_tefeu")
 flat = true
 icon_alignment = 1
@@ -128,6 +133,7 @@ expand_icon = true
 custom_minimum_size = Vector2(28, 28)
 layout_mode = 2
 size_flags_vertical = 4
+theme_override_styles/hover = SubResource("StyleBoxFlat_fv21b")
 icon = ExtResource("6_o6xl0")
 flat = true
 expand_icon = true
