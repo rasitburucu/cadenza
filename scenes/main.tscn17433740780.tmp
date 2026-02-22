@@ -13,19 +13,13 @@
 [ext_resource type="Texture2D" uid="uid://ctkyty76oujn1" path="res://assets/ui/graphics/ShuffleBtnFull.png" id="11_pm3ni"]
 [ext_resource type="Texture2D" uid="uid://5st6ljgxfad6" path="res://assets/ui/graphics/MainPage@4x.png" id="12_eb6dy"]
 [ext_resource type="Texture2D" uid="uid://lm8kp7brckpd" path="res://assets/ui/graphics/PreviousBtnFull.png" id="12_y6deb"]
-[ext_resource type="Texture2D" uid="uid://ccst883elfkth" path="res://assets/ui/graphics/ShufflePressBtnFull.png" id="12_yq6so"]
 [ext_resource type="Texture2D" uid="uid://d0wx8ml2urnwo" path="res://assets/ui/graphics/PlayBtnFull.png" id="13_og1vs"]
 [ext_resource type="Texture2D" uid="uid://cqacfwg2dtvcd" path="res://assets/ui/graphics/NextBtnFull.png" id="14_2wyq8"]
-[ext_resource type="Texture2D" uid="uid://x812xay5h11w" path="res://assets/ui/graphics/PreviousPressBtnFull.png" id="14_fv21b"]
 [ext_resource type="Texture2D" uid="uid://b541ptdi21xk3" path="res://assets/ui/graphics/RepeatBtnFull.png" id="15_vxglm"]
 [ext_resource type="Texture2D" uid="uid://brwt6qgl402ko" path="res://assets/ui/graphics/VolumeDown.svg" id="16_dp3eg"]
-[ext_resource type="Texture2D" uid="uid://mcl76vsq7m3e" path="res://assets/ui/graphics/PlayPressBtnFull.png" id="16_tel4y"]
 [ext_resource type="Texture2D" uid="uid://bv3eyi1mq5iym" path="res://assets/ui/graphics/VolumeUp.svg" id="17_0ld40"]
 [ext_resource type="Texture2D" uid="uid://ck6tvaoi75x25" path="res://assets/ui/graphics/TrackList.svg" id="18_0ld40"]
-[ext_resource type="Texture2D" uid="uid://b0l8ghmkd8fm2" path="res://assets/ui/graphics/NextPressBtnFull.png" id="18_qkpxi"]
 [ext_resource type="Texture2D" uid="uid://dviltcu52vi83" path="res://assets/ui/graphics/MiddleMenu.svg" id="19_gqmmt"]
-[ext_resource type="FontVariation" uid="uid://duuakh65v0eno" path="res://assets/ui/fonts/font_tracklist.tres" id="19_y6deb"]
-[ext_resource type="Texture2D" uid="uid://3j0aimtp8qj1" path="res://assets/ui/graphics/RepeatPressBtnFull.png" id="20_5q0nq"]
 [ext_resource type="Texture2D" uid="uid://dipv0kd3n36vr" path="res://assets/ui/AddFile.svg" id="20_jscy8"]
 [ext_resource type="Texture2D" uid="uid://cadhx4j314heb" path="res://assets/ui/AddFolder.svg" id="21_pm3ni"]
 [ext_resource type="Texture2D" uid="uid://d4l8rdx0wan8t" path="res://assets/ui/graphics/Remove.svg" id="22_pm3ni"]
@@ -70,6 +64,7 @@ expand_mode = 1
 
 [node name="SeekTimer" type="Timer" parent="." unique_id=1207085821]
 wait_time = 0.1
+autostart = true
 
 [node name="PlayerBackground" type="Panel" parent="." unique_id=2034497663]
 layout_mode = 0
@@ -181,7 +176,6 @@ size_flags_horizontal = 5
 size_flags_vertical = 4
 theme = ExtResource("1_0wfyh")
 texture_normal = ExtResource("11_pm3ni")
-texture_pressed = ExtResource("12_yq6so")
 ignore_texture_size = true
 stretch_mode = 4
 
@@ -192,7 +186,6 @@ size_flags_horizontal = 5
 size_flags_vertical = 4
 theme = ExtResource("1_0wfyh")
 texture_normal = ExtResource("12_y6deb")
-texture_pressed = ExtResource("14_fv21b")
 ignore_texture_size = true
 stretch_mode = 4
 
@@ -203,7 +196,6 @@ size_flags_horizontal = 5
 size_flags_vertical = 4
 theme = ExtResource("1_0wfyh")
 texture_normal = ExtResource("13_og1vs")
-texture_pressed = ExtResource("16_tel4y")
 ignore_texture_size = true
 stretch_mode = 4
 
@@ -213,7 +205,6 @@ layout_mode = 2
 size_flags_horizontal = 5
 size_flags_vertical = 4
 texture_normal = ExtResource("14_2wyq8")
-texture_pressed = ExtResource("18_qkpxi")
 ignore_texture_size = true
 stretch_mode = 4
 
@@ -223,7 +214,6 @@ layout_mode = 2
 size_flags_horizontal = 5
 size_flags_vertical = 4
 texture_normal = ExtResource("15_vxglm")
-texture_pressed = ExtResource("20_5q0nq")
 ignore_texture_size = true
 stretch_mode = 4
 
@@ -255,8 +245,6 @@ texture = ExtResource("17_0ld40")
 expand_mode = 2
 
 [node name="TrackListPanel" type="Panel" parent="." unique_id=316044682]
-clip_children = 2
-clip_contents = true
 custom_minimum_size = Vector2(50, 50)
 layout_mode = 0
 offset_left = -180.0
@@ -268,25 +256,18 @@ metadata/_edit_use_anchors_ = true
 
 [node name="TrackList" type="ItemList" parent="TrackListPanel" unique_id=1606656426]
 layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -180.0
+offset_top = -82.9635
+offset_right = 180.0
+offset_bottom = 83.0365
 grow_horizontal = 2
 grow_vertical = 2
 size_flags_vertical = 3
-theme_override_colors/font_color = Color(0.12941177, 0.12941177, 0.12941177, 1)
-theme_override_colors/font_hovered_color = Color(0.13333334, 0.12941177, 0.12941177, 1)
-theme_override_colors/font_hovered_selected_color = Color(0.12156863, 0.11764706, 0.11764706, 1)
-theme_override_colors/font_selected_color = Color(0.11372549, 0.11372549, 0.11372549, 1)
-theme_override_constants/h_separation = 35
-theme_override_constants/v_separation = 5
-theme_override_fonts/font = ExtResource("19_y6deb")
-theme_override_font_sizes/font_size = 12
-allow_reselect = true
-allow_search = false
-auto_width = true
-scroll_hint_mode = 3
-fixed_icon_size = Vector2i(5, 5)
 
 [node name="PlaylistControlsPanel" type="Panel" parent="." unique_id=739014678]
 layout_mode = 1

@@ -1,0 +1,9 @@
+[gd_resource type="FontVariation" format=3 uid="uid://rpim0t3pwavy"]
+
+[ext_resource type="FontFile" uid="uid://b5lrohcimlq8n" path="res://assets/ui/fonts/Montserrat-Italic-VariableFont_wght.ttf" id="1_rc0mv"]
+
+[resource]
+base_font = ExtResource("1_rc0mv")
+variation_opentype = {
+2003265652: 700
+}
