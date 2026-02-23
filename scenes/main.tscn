@@ -72,9 +72,6 @@ expand_mode = 1
 
 [node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=2060343011]
 
-[node name="SeekTimer" type="Timer" parent="." unique_id=1207085821]
-wait_time = 0.1
-
 [node name="PlayerBackground" type="Panel" parent="." unique_id=2034497663]
 layout_mode = 0
 offset_left = -180.0
@@ -365,6 +362,5 @@ scale = Vector2(0.24828123, 0.24828123)
 texture = ExtResource("12_eb6dy")
 
 [connection signal="finished" from="AudioStreamPlayer" to="." method="_on_next_button_pressed"]
-[connection signal="timeout" from="SeekTimer" to="." method="_on_seek_timer_timeout"]
 [connection signal="files_selected" from="FileDialog" to="." method="_on_file_dialog_files_selected"]
 [connection signal="dir_selected" from="FolderDialog" to="." method="_on_folder_dialog_dir_selected"]
