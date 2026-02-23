@@ -8,7 +8,14 @@ var shuffle_on: bool       = false
 var is_muted: bool         = false
 var pre_mute_volume: float = 80.0
 var always_on_top: bool    = false
-var last_elapsed_sec: int  = -1 # Label optimizasyonu için
+var last_elapsed_sec: int  = -1
+
+# Marquee (Kayan Yazı) değişkenleri
+var original_track_name: String = ""
+var needs_marquee: bool         = false
+var marquee_timer: float        = 0.0
+const MARQUEE_SPEED: float      = 0.2
+const MARQUEE_LIMIT: int        = 28
 
 enum RepeatMode { OFF, ALL, ONE }
 var repeat_mode: RepeatMode = RepeatMode.OFF
@@ -59,7 +66,7 @@ func _ready() -> void:
 	_tex_shuffle_off = shuffle_btn.texture_normal
 	_tex_repeat_off  = repeat_btn.texture_normal
 
-	# Pencere
+	# Pencere kontrolleri
 	minimize_btn.pressed.connect(_on_minimize)
 	close_btn.pressed.connect(_on_close)
 
@@ -67,10 +74,10 @@ func _ready() -> void:
 	var topbar = $PlayerBackground/MainLayout/TopBar
 	topbar.gui_input.connect(_on_topbar_input)
 	
-	# Sürükle-Bırak (Drag & Drop) Entegrasyonu
+	# Sürükle-Bırak Entegrasyonu
 	get_window().files_dropped.connect(_on_files_dropped)
 
-	# Playback (Editörden bağlı olmayanlar manuel bağlanıyor)
+	# Playback bağlantıları
 	if not play_pause_btn.pressed.is_connected(_on_play_pause_pressed):
 		play_pause_btn.pressed.connect(_on_play_pause_pressed)
 	if not prev_btn.pressed.is_connected(_on_prev_pressed):
@@ -84,7 +91,7 @@ func _ready() -> void:
 	if not audio_player.finished.is_connected(_on_track_finished):
 		audio_player.finished.connect(_on_track_finished)
 
-	# Seek - Timer yerine pürüzsüz akış
+	# Seek ayarları
 	if not seek_slider.drag_started.is_connected(_on_seek_drag_started):
 		seek_slider.drag_started.connect(_on_seek_drag_started)
 	if not seek_slider.drag_ended.is_connected(_on_seek_drag_ended):
@@ -92,14 +99,14 @@ func _ready() -> void:
 	seek_slider.max_value = 100.0
 	seek_slider.step = 0.01
 
-	# Volume
+	# Volume ayarları
 	if not volume_slider.value_changed.is_connected(_on_volume_changed):
 		volume_slider.value_changed.connect(_on_volume_changed)
 	if not mute_btn.pressed.is_connected(_on_mute_pressed):
 		mute_btn.pressed.connect(_on_mute_pressed)
 	volume_slider.value = 80.0
 
-	# Playlist
+	# Playlist bağlantıları
 	if not add_file_btn.pressed.is_connected(_on_add_file_pressed):
 		add_file_btn.pressed.connect(_on_add_file_pressed)
 	if not add_folder_btn.pressed.is_connected(_on_add_folder_pressed):
@@ -109,14 +116,19 @@ func _ready() -> void:
 	if not tracklist.item_activated.is_connected(_on_track_activated):
 		tracklist.item_activated.connect(_on_track_activated)
 
-	# FileDialog filtreleri
+	# Filtreler ve UI Input
 	file_dialog.filters     = PackedStringArray(["*.mp3 ; MP3 Files"])
 	file_dialog.file_mode   = FileDialog.FILE_MODE_OPEN_FILES
 	folder_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
-
-	# Volume scroll
 	if not volume_slider.gui_input.is_connected(_on_volume_scroll):
 		volume_slider.gui_input.connect(_on_volume_scroll)
+
+	# ── UI TAŞMA (OVERFLOW) DÜZELTMESİ ─────────────────────────────────────
+	track_name.clip_text = true
+	artist_name.clip_text = true
+	track_name.custom_minimum_size.x = 1
+	artist_name.custom_minimum_size.x = 1
+	# ───────────────────────────────────────────────────────────────────────
 
 	# Başlangıç UI
 	elapsed_label.text = "00:00"
@@ -125,11 +137,21 @@ func _ready() -> void:
 	artist_name.text   = "Bir parça ekle"
 	DisplayServer.window_set_title("Cadenza")
 
+	_bind_button_animations()
 	_load_config()
 
 
-# ── Sürekli Akış (Frame-based Update) ──────────────────────────────────
-func _process(_delta: float) -> void:
+# ── Sürekli Akış (Frame-based Update & Marquee) ────────────────────────
+func _process(delta: float) -> void:
+	# Marquee Efekti
+	if needs_marquee:
+		marquee_timer += delta
+		if marquee_timer >= MARQUEE_SPEED:
+			marquee_timer = 0.0
+			var current_text = track_name.text
+			track_name.text = current_text.substr(1, current_text.length() - 1) + current_text[0]
+
+	# Seek Slider Güncellemesi
 	if audio_player.stream == null:
 		return
 		
@@ -139,21 +161,50 @@ func _process(_delta: float) -> void:
 			var pos = audio_player.get_playback_position()
 			seek_slider.value = (pos / total) * 100.0
 			
-			# String oluşturma maliyetini düşürmek için saniyede 1 kez güncelle
 			var current_sec = int(pos)
 			if current_sec != last_elapsed_sec:
 				last_elapsed_sec = current_sec
 				elapsed_label.text = _format_time(pos)
 
 
-# ── Keyboard shortcuts ─────────────────────────────────────────────────
+# ── Dinamik Tween Animasyon Motoru ─────────────────────────────────────
+func _bind_button_animations() -> void:
+	await get_tree().process_frame 
+	
+	var interactive_buttons = [
+		play_pause_btn, prev_btn, next_btn, shuffle_btn, repeat_btn, 
+		mute_btn, minimize_btn, close_btn, add_file_btn, add_folder_btn, remove_btn
+	]
+	
+	for btn in interactive_buttons:
+		if btn == null: continue
+		btn.pivot_offset = btn.size / 2.0
+		
+		btn.button_down.connect(func(): _animate_node(btn, Vector2(0.85, 0.85), 0.1))
+		btn.button_up.connect(func(): _animate_node(btn, Vector2(1.05, 1.05), 0.15))
+		btn.mouse_entered.connect(func(): _animate_node(btn, Vector2(1.05, 1.05), 0.15))
+		btn.mouse_exited.connect(func(): _animate_node(btn, Vector2(1.0, 1.0), 0.2))
+
+func _animate_node(node: Node, target_scale: Vector2, duration: float) -> void:
+	var tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(node, "scale", target_scale, duration)
+
+
+# ── Keyboard & Media Shortcuts ─────────────────────────────────────────
 func _unhandled_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed:
 		return
 
 	match event.keycode:
-		KEY_SPACE:
+		KEY_SPACE, KEY_MEDIAPLAY:
 			_on_play_pause_pressed()
+		KEY_MEDIANEXT, KEY_N:
+			_on_next_pressed()
+		KEY_MEDIAPREVIOUS, KEY_P:
+			_on_prev_pressed()
+		KEY_MEDIASTOP:
+			audio_player.stop()
+			_refresh_play_button()
 		KEY_LEFT:
 			if audio_player.stream != null:
 				var pos = max(0.0, audio_player.get_playback_position() - 5.0)
@@ -165,10 +216,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				audio_player.seek(pos)
 		KEY_M:
 			_on_mute_pressed()
-		KEY_N:
-			_on_next_pressed()
-		KEY_P:
-			_on_prev_pressed()
 		KEY_T:
 			always_on_top = not always_on_top
 			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, always_on_top)
@@ -184,7 +231,7 @@ func _on_topbar_input(event: InputEvent) -> void:
 # ── Parça yükleme ──────────────────────────────────────────────────────
 func _load_track(index: int, autoplay: bool = true) -> void:
 	current_index = index
-	last_elapsed_sec = -1 # Yeni parça için label optimizasyonunu sıfırla
+	last_elapsed_sec = -1
 
 	var stream  = AudioStreamMP3.new()
 	stream.data = FileAccess.get_file_as_bytes(tracks[index])
@@ -192,12 +239,19 @@ func _load_track(index: int, autoplay: bool = true) -> void:
 
 	var basename = tracks[index].get_file().get_basename()
 	if " - " in basename:
-		var parts        = basename.split(" - ", true, 1)
-		artist_name.text = parts[0]
-		track_name.text  = parts[1]
+		var parts = basename.split(" - ", true, 1)
+		artist_name.text = parts[0].strip_edges()
+		original_track_name = parts[1].strip_edges()
 	else:
-		track_name.text  = basename
+		original_track_name = basename.strip_edges()
 		artist_name.text = ""
+
+	if original_track_name.length() > MARQUEE_LIMIT:
+		needs_marquee = true
+		track_name.text = original_track_name + "   •   "
+	else:
+		needs_marquee = false
+		track_name.text = original_track_name
 
 	total_label.text  = _format_time(stream.get_length())
 	seek_slider.value = 0.0
@@ -210,7 +264,7 @@ func _load_track(index: int, autoplay: bool = true) -> void:
 	tracklist.ensure_current_is_visible()
 	
 	_refresh_play_button()
-	DisplayServer.window_set_title("Cadenza - " + track_name.text)
+	DisplayServer.window_set_title("Cadenza - " + original_track_name)
 
 
 func _refresh_play_button() -> void:
@@ -418,6 +472,7 @@ func _on_remove_pressed() -> void:
 		track_name.text  = "Cadenza"
 		artist_name.text = "Bir parça ekle"
 		total_label.text = "00:00"
+		needs_marquee = false
 		DisplayServer.window_set_title("Cadenza")
 	elif index < current_index:
 		current_index -= 1
