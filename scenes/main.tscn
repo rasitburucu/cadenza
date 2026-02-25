@@ -368,7 +368,6 @@ scale = Vector2(0.24828123, 0.24828123)
 texture = ExtResource("12_eb6dy")
 
 [node name="YoutubeOverlay" type="Panel" parent="." unique_id=522433877]
-visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -399,13 +398,15 @@ grow_vertical = 2
 placeholder_text = "Paste the Youtube link here."
 
 [node name="PopupDownloadBtn" type="Button" parent="YoutubeOverlay" unique_id=1203213382]
+custom_minimum_size = Vector2(155.77, 40.5)
 layout_mode = 0
-offset_left = 35.5
+offset_left = 37.5
 offset_top = 104.5
 offset_right = 198.27026
 offset_bottom = 154.0
 icon = ExtResource("4_tel4y")
 flat = true
+icon_alignment = 1
 expand_icon = true
 
 [node name="PopupCancelBtn" type="Button" parent="YoutubeOverlay" unique_id=131290156]
@@ -416,6 +417,7 @@ offset_right = 375.1232
 offset_bottom = 157.5
 icon = ExtResource("5_qkpxi")
 flat = true
+icon_alignment = 1
 expand_icon = true
 
 [connection signal="finished" from="AudioStreamPlayer" to="." method="_on_next_button_pressed"]

@@ -133,7 +133,7 @@ func _setup_signals() -> void:
 	yt_popup_cancel_btn.pressed.connect(_on_youtube_popup_canceled)
 
 
-# ── Continuous Loop (Frame-based Update & Marquee) ─────────────────────
+# ── Continuous Loop (Frame based Update and Marquee) ─────────────────────
 func _process(delta: float) -> void:
 	if needs_marquee:
 		marquee_timer += delta
@@ -161,28 +161,45 @@ func _process(delta: float) -> void:
 func _bind_button_animations() -> void:
 	await get_tree().process_frame 
 	
-	# Array containing all interactive UI buttons
-	var interactive_buttons = [
+	# Group 1: Small square icons that can handle deeper scaling
+	var icon_buttons = [
 		play_pause_btn, prev_btn, next_btn, shuffle_btn, repeat_btn, 
-		mute_btn, minimize_btn, close_btn, add_file_btn, add_folder_btn, remove_btn,
+		mute_btn, minimize_btn, close_btn
+	]
+	
+	# Group 2: Wide rectangular buttons that distort if scaled too much
+	var wide_text_buttons = [
+		add_file_btn, add_folder_btn, remove_btn,
 		yt_popup_dl_btn, yt_popup_cancel_btn 
 	]
 	
-	for btn in interactive_buttons:
+	for btn in icon_buttons:
 		if btn == null: continue
-		btn.pivot_offset = btn.size / 2.0
-		
-		btn.button_down.connect(func(): _animate_node(btn, Vector2(0.85, 0.85), 0.1))
+		# Noticeable bounce for icons (0.90 down, 1.05 up)
+		btn.button_down.connect(func(): _animate_node(btn, Vector2(0.90, 0.90), 0.1))
 		btn.button_up.connect(func(): _animate_node(btn, Vector2(1.05, 1.05), 0.15))
 		btn.mouse_entered.connect(func(): _animate_node(btn, Vector2(1.05, 1.05), 0.15))
 		btn.mouse_exited.connect(func(): _animate_node(btn, Vector2(1.0, 1.0), 0.2))
 
-func _animate_node(node: Node, target_scale: Vector2, duration: float) -> void:
+	for btn in wide_text_buttons:
+		if btn == null: continue
+		# Very subtle micro-scaling for wide buttons (0.98 down, 1.01 up)
+		btn.button_down.connect(func(): _animate_node(btn, Vector2(0.98, 0.98), 0.1))
+		btn.button_up.connect(func(): _animate_node(btn, Vector2(1.01, 1.01), 0.15))
+		btn.mouse_entered.connect(func(): _animate_node(btn, Vector2(1.01, 1.01), 0.15))
+		btn.mouse_exited.connect(func(): _animate_node(btn, Vector2(1.0, 1.0), 0.2))
+
+func _animate_node(node: Control, target_scale: Vector2, duration: float) -> void:
+	if node == null: return
+	
+	# Recalculate pivot to absolute center immediately before scaling
+	node.pivot_offset = node.size / 2.0
+	
 	var tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tween.tween_property(node, "scale", target_scale, duration)
 
 
-# ── Keyboard & Media Shortcuts ───────────────────────────────────────────
+# ── Keyboard and Media Shortcuts ─────────────────────────────────────────
 func _unhandled_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed:
 		return
@@ -328,7 +345,7 @@ func _on_seek_drag_ended(_value_changed: bool) -> void:
 	last_elapsed_sec = int(seek_pos)
 
 
-# ── Volume & Mute ────────────────────────────────────────────────────────
+# ── Volume and Mute ──────────────────────────────────────────────────────
 func _on_volume_changed(value: float) -> void:
 	if not is_muted:
 		audio_player.volume_db = linear_to_db(value / 100.0)
@@ -352,7 +369,7 @@ func _on_mute_pressed() -> void:
 		mute_btn.modulate      = Color(1, 1, 1)
 
 
-# ── Shuffle & Repeat ─────────────────────────────────────────────────────
+# ── Shuffle and Repeat ───────────────────────────────────────────────────
 func _on_shuffle_pressed() -> void:
 	shuffle_on = not shuffle_on
 	shuffle_btn.texture_normal = _tex_shuffle_on if shuffle_on else _tex_shuffle_off
@@ -375,6 +392,7 @@ func _on_youtube_smart_pressed() -> void:
 	_show_youtube_popup()
 
 func _show_youtube_popup() -> void:
+	# Show custom overlay layer instead of primitive OS dialog
 	yt_overlay.visible = true
 	yt_popup_input.text = ""
 	yt_popup_input.grab_focus()
@@ -443,24 +461,51 @@ func _on_download_finished(exit_code: int, output: Array, dl_dir: String) -> voi
 		await _scan_folder_recursive(dl_dir)
 		_refresh_playlist()
 		
+		# UI FEEDBACK: Show success message temporarily
+		original_track_name = "Download Complete! Added to library."
+		track_name.text = original_track_name
+		artist_name.text = ""
+		needs_marquee = true
+		
+		# Wait 3 seconds asynchronously without freezing the game
+		await get_tree().create_timer(3.0).timeout
+		
 		if was_empty and not tracks.is_empty():
 			_load_track(0)
 		else:
-			# Revert to standard UI text if nothing was playing before
-			if audio_player.stream == null:
-				track_name.text = "Cadenza"
-				artist_name.text = "Add a track"
-				needs_marquee = false
+			_restore_now_playing_ui()
 	else:
 		var error_msg = "Download failed!\nCheck your connection and the link."
 		OS.alert(error_msg, "Download Error")
 		print("Download failed! Error code: ", exit_code)
 		if output.size() > 0: print(output[0])
 		
-		if audio_player.stream == null:
-			track_name.text = "Cadenza"
-			artist_name.text = "Add a track"
-			needs_marquee = false
+		_restore_now_playing_ui()
+
+
+# ── UI State Restoration ─────────────────────────────────────────────────
+func _restore_now_playing_ui() -> void:
+	if audio_player.stream == null:
+		track_name.text = "Cadenza"
+		artist_name.text = "Add a track"
+		needs_marquee = false
+		return
+
+	var basename = tracks[current_index].get_file().get_basename()
+	if " - " in basename:
+		var parts = basename.split(" - ", true, 1)
+		artist_name.text = parts[0].strip_edges()
+		original_track_name = parts[1].strip_edges()
+	else:
+		original_track_name = basename.strip_edges()
+		artist_name.text = ""
+
+	if original_track_name.length() > MARQUEE_LIMIT:
+		needs_marquee = true
+		track_name.text = original_track_name + "   •   "
+	else:
+		needs_marquee = false
+		track_name.text = original_track_name
 
 
 # ── SMART LOCAL MEDIA PICKER ─────────────────────────────────────────────
@@ -495,7 +540,7 @@ func _on_native_folder_selected(status: bool, selected_paths: PackedStringArray,
 	if was_empty and not tracks.is_empty(): _load_track(0)
 
 
-# ── Anti-Freeze Recursive Folder Scanner ─────────────────────────────────
+# ── Anti Freeze Recursive Folder Scanner ─────────────────────────────────
 func _scan_folder_recursive(path: String) -> void:
 	var dir = DirAccess.open(path)
 	if dir == null: return
@@ -523,7 +568,7 @@ func _scan_folder_recursive(path: String) -> void:
 	dir.list_dir_end()
 
 
-# ── Playlist & Drag-and-Drop Management ──────────────────────────────────
+# ── Playlist and Drag and Drop Management ────────────────────────────────
 func _on_files_dropped(files: PackedStringArray) -> void:
 	var was_empty = tracks.is_empty()
 	for path in files:
@@ -564,7 +609,7 @@ func _refresh_playlist() -> void:
 		tracklist.add_item(basename)
 
 
-# ── Configuration (Save/Load State) ──────────────────────────────────────
+# ── Configuration (Save and Load State) ──────────────────────────────────
 func _save_config() -> void:
 	var config = {
 		"volume":        volume_slider.value,
