@@ -1,6 +1,6 @@
 extends Control
 
-# ── Durum değişkenleri ─────────────────────────────────────────────────
+# ── State Variables ──────────────────────────────────────────────────────
 var tracks: Array[String]  = []
 var current_index: int     = 0
 var user_dragging: bool    = false
@@ -10,7 +10,7 @@ var pre_mute_volume: float = 80.0
 var always_on_top: bool    = false
 var last_elapsed_sec: int  = -1
 
-# Marquee (Kayan Yazı) değişkenleri
+# ── Marquee Variables ────────────────────────────────────────────────────
 var original_track_name: String = ""
 var needs_marquee: bool         = false
 var marquee_timer: float        = 0.0
@@ -20,12 +20,10 @@ const MARQUEE_LIMIT: int        = 28
 enum RepeatMode { OFF, ALL, ONE }
 var repeat_mode: RepeatMode = RepeatMode.OFF
 
-# YouTube İndirme ve UI Değişkenleri
+# ── YouTube Download Engine Variables ────────────────────────────────────
 var download_thread: Thread
-var yt_dialog: ConfirmationDialog
-var yt_line_edit: LineEdit
 
-# ── Texture önbelleği ──────────────────────────────────────────────────
+# ── Texture Cache ────────────────────────────────────────────────────────
 var _tex_play: Texture2D        = preload("res://assets/ui/graphics/PlayBtnFull.png")
 var _tex_stop: Texture2D        = preload("res://assets/ui/graphics/StopBtnFull.png")
 var _tex_shuffle_on: Texture2D  = preload("res://assets/ui/graphics/ShuffleBtnPressFull.png")
@@ -34,7 +32,7 @@ var _tex_repeat_one: Texture2D  = preload("res://assets/ui/graphics/RepeatTrackB
 var _tex_shuffle_off: Texture2D
 var _tex_repeat_off: Texture2D
 
-# ── Node referansları ──────────────────────────────────────────────────
+# ── Node References ──────────────────────────────────────────────────────
 @onready var audio_player   = $AudioStreamPlayer
 
 @onready var seek_slider    = $PlayerBackground/MainLayout/SeekBar/SeekSlider
@@ -61,30 +59,39 @@ var _tex_repeat_off: Texture2D
 @onready var add_folder_btn = $PlaylistControlsPanel/PlaylistControls/AddFolderBtn
 @onready var remove_btn     = $PlaylistControlsPanel/PlaylistControls/RemoveBtn
 
+# ── Custom YouTube Popup References ──────────────────────────────────────
+@onready var yt_overlay          = $YoutubeOverlay
+@onready var yt_popup_input      = $YoutubeOverlay/PopupUrlInput
+@onready var yt_popup_dl_btn     = $YoutubeOverlay/PopupDownloadBtn
+@onready var yt_popup_cancel_btn = $YoutubeOverlay/PopupCancelBtn
 
-# ── Başlangıç ──────────────────────────────────────────────────────────
+
+# ── Initialization ───────────────────────────────────────────────────────
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
 
 	_tex_shuffle_off = shuffle_btn.texture_normal
 	_tex_repeat_off  = repeat_btn.texture_normal
 
-	# UI TAŞMA (OVERFLOW) DÜZELTMESİ
+	# UI OVERFLOW FIX
 	track_name.clip_text = true
 	artist_name.clip_text = true
 	track_name.custom_minimum_size.x = 1
 	artist_name.custom_minimum_size.x = 1
 
-	# Başlangıç UI
+	# Initial UI Setup
 	elapsed_label.text = "00:00"
 	total_label.text   = "00:00"
 	track_name.text    = "Cadenza"
-	artist_name.text   = "Bir parça ekle"
+	artist_name.text   = "Add a track"
 	DisplayServer.window_set_title("Cadenza")
 	
 	seek_slider.max_value = 100.0
 	seek_slider.step = 0.01
 	volume_slider.value = 80.0
+	
+	# Popup should be hidden initially
+	yt_overlay.visible = false
 
 	_setup_signals()
 	_bind_button_animations()
@@ -112,17 +119,21 @@ func _setup_signals() -> void:
 	volume_slider.gui_input.connect(_on_volume_scroll)
 	mute_btn.pressed.connect(_on_mute_pressed)
 
-	# Akıllı Butonlar
+	# Smart Buttons
 	add_file_btn.pressed.connect(_on_youtube_smart_pressed)
 	add_folder_btn.gui_input.connect(_on_smart_local_input)
 	remove_btn.pressed.connect(_on_remove_pressed)
 	
-	# Tracklist - Tek ve Çift tık desteği
+	# Tracklist Support for Single/Double Click
 	tracklist.item_activated.connect(_on_track_activated)
 	tracklist.item_selected.connect(_on_track_activated)
+	
+	# Custom Popup Signals
+	yt_popup_dl_btn.pressed.connect(_on_youtube_popup_confirmed)
+	yt_popup_cancel_btn.pressed.connect(_on_youtube_popup_canceled)
 
 
-# ── Sürekli Akış (Frame-based Update & Marquee) ────────────────────────
+# ── Continuous Loop (Frame-based Update & Marquee) ─────────────────────
 func _process(delta: float) -> void:
 	if needs_marquee:
 		marquee_timer += delta
@@ -146,13 +157,15 @@ func _process(delta: float) -> void:
 				elapsed_label.text = _format_time(pos)
 
 
-# ── Dinamik Tween Animasyon Motoru ─────────────────────────────────────
+# ── Dynamic Tween Animation Engine ───────────────────────────────────────
 func _bind_button_animations() -> void:
 	await get_tree().process_frame 
 	
+	# Array containing all interactive UI buttons
 	var interactive_buttons = [
 		play_pause_btn, prev_btn, next_btn, shuffle_btn, repeat_btn, 
-		mute_btn, minimize_btn, close_btn, add_file_btn, add_folder_btn, remove_btn
+		mute_btn, minimize_btn, close_btn, add_file_btn, add_folder_btn, remove_btn,
+		yt_popup_dl_btn, yt_popup_cancel_btn 
 	]
 	
 	for btn in interactive_buttons:
@@ -169,7 +182,7 @@ func _animate_node(node: Node, target_scale: Vector2, duration: float) -> void:
 	tween.tween_property(node, "scale", target_scale, duration)
 
 
-# ── Keyboard & Media Shortcuts ─────────────────────────────────────────
+# ── Keyboard & Media Shortcuts ───────────────────────────────────────────
 func _unhandled_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed:
 		return
@@ -197,14 +210,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_on_mute_pressed()
 
 
-# ── Pencere Sürükleme ──────────────────────────────────────────────────
+# ── Window Dragging ──────────────────────────────────────────────────────
 func _on_topbar_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			DisplayServer.window_start_drag()
 
 
-# ── Parça Yükleme ──────────────────────────────────────────────────────
+# ── Track Loading ────────────────────────────────────────────────────────
 func _load_track(index: int, autoplay: bool = true) -> void:
 	current_index = index
 	last_elapsed_sec = -1
@@ -255,7 +268,7 @@ func _refresh_repeat_button() -> void:
 		RepeatMode.ONE: repeat_btn.texture_normal = _tex_repeat_one
 
 
-# ── Playback kontrolleri ───────────────────────────────────────────────
+# ── Playback Controls ────────────────────────────────────────────────────
 func _on_play_pause_pressed() -> void:
 	if audio_player.stream_paused:
 		audio_player.stream_paused = false
@@ -301,7 +314,7 @@ func _play_next(force_next: bool = false) -> void:
 					_refresh_play_button()
 
 
-# ── Seek Kontrolleri ───────────────────────────────────────────────────
+# ── Seek Controls ────────────────────────────────────────────────────────
 func _on_seek_drag_started() -> void:
 	user_dragging = true
 
@@ -315,7 +328,7 @@ func _on_seek_drag_ended(_value_changed: bool) -> void:
 	last_elapsed_sec = int(seek_pos)
 
 
-# ── Volume & Mute ──────────────────────────────────────────────────────
+# ── Volume & Mute ────────────────────────────────────────────────────────
 func _on_volume_changed(value: float) -> void:
 	if not is_muted:
 		audio_player.volume_db = linear_to_db(value / 100.0)
@@ -339,7 +352,7 @@ func _on_mute_pressed() -> void:
 		mute_btn.modulate      = Color(1, 1, 1)
 
 
-# ── Shuffle & Repeat ───────────────────────────────────────────────────
+# ── Shuffle & Repeat ─────────────────────────────────────────────────────
 func _on_shuffle_pressed() -> void:
 	shuffle_on = not shuffle_on
 	shuffle_btn.texture_normal = _tex_shuffle_on if shuffle_on else _tex_shuffle_off
@@ -349,49 +362,35 @@ func _on_repeat_pressed() -> void:
 	_refresh_repeat_button()
 
 
-# ── YOUTUBE PANO (CLIPBOARD) VE İNDİRME MOTORU ─────────────────────────
+# ── YOUTUBE DOWNLOAD ENGINE ──────────────────────────────────────────────
 func _get_base_dir() -> String:
-	# Eğer uygulaman Godot Editörünün içinde çalışıyorsa (Test)
+	# Check if running inside the Godot Editor (Testing mode)
 	if OS.has_feature("editor"):
 		return ProjectSettings.globalize_path("res://")
-	# Eğer uygulaman Editörde DEĞİLSE (Yani bir .exe isek)
+	# Check if running as an exported executable
 	else:
 		return OS.get_executable_path().get_base_dir()
 
 func _on_youtube_smart_pressed() -> void:
-	var clipboard_text = DisplayServer.clipboard_get().strip_edges()
-	
-	if clipboard_text.begins_with("https://www.youtube.com/") or clipboard_text.begins_with("https://youtu.be/"):
-		_start_youtube_download(clipboard_text)
-	else:
-		_show_youtube_popup()
+	_show_youtube_popup()
 
 func _show_youtube_popup() -> void:
-	if yt_dialog == null:
-		yt_dialog = ConfirmationDialog.new()
-		yt_dialog.title = "YouTube'dan İndir"
-		yt_dialog.dialog_text = "Videonun linkini yapıştırın:"
-		yt_dialog.confirmed.connect(_on_youtube_popup_confirmed)
-		
-		yt_line_edit = LineEdit.new()
-		yt_line_edit.placeholder_text = "https://www.youtube.com/..."
-		yt_line_edit.custom_minimum_size.x = 300
-		yt_dialog.add_child(yt_line_edit)
-		
-		add_child(yt_dialog)
-	
-	yt_line_edit.text = ""
-	yt_dialog.popup_centered()
-	yt_line_edit.grab_focus()
+	yt_overlay.visible = true
+	yt_popup_input.text = ""
+	yt_popup_input.grab_focus()
 
 func _on_youtube_popup_confirmed() -> void:
-	var url = yt_line_edit.text.strip_edges()
+	var url = yt_popup_input.text.strip_edges()
+	yt_overlay.visible = false
 	if url != "":
 		_start_youtube_download(url)
 
+func _on_youtube_popup_canceled() -> void:
+	yt_overlay.visible = false
+
 func _start_youtube_download(url: String) -> void:
 	if download_thread != null and download_thread.is_alive():
-		print("Zaten bir indirme işlemi sürüyor!")
+		print("Download already in progress!")
 		return
 		
 	var base_dir = _get_base_dir()
@@ -404,13 +403,19 @@ func _start_youtube_download(url: String) -> void:
 		
 	var ytdlp_path = bin_dir + "/yt-dlp.exe"
 	
-	# İŞTE BURASI KÖR UÇUŞU BİTİREN VE HATAYI EKRANA BASAN KISIM
+	# Error handling with native OS alert box for missing dependencies
 	if not FileAccess.file_exists(ytdlp_path):
-		var error_msg = "KRİTİK HATA: yt-dlp.exe bulunamadı!\nŞu klasörde arandı: " + ytdlp_path
-		OS.alert(error_msg, "Eksik Dosya veya Klasör")
+		var error_msg = "CRITICAL ERROR: yt-dlp.exe not found!\nSearched in: " + ytdlp_path
+		OS.alert(error_msg, "Missing File or Directory")
 		return
 
-	print("İndirme başladı: ", url)
+	# UI FEEDBACK: Show download progress on screen
+	original_track_name = "Downloading from YouTube... Please wait..."
+	track_name.text = original_track_name
+	artist_name.text = ""
+	needs_marquee = true
+
+	print("Download started: ", url)
 	download_thread = Thread.new()
 	download_thread.start(_run_ytdlp_thread.bind(ytdlp_path, bin_dir, dl_dir, url))
 
@@ -432,7 +437,7 @@ func _on_download_finished(exit_code: int, output: Array, dl_dir: String) -> voi
 	download_thread.wait_to_finish()
 	
 	if exit_code == 0:
-		print("İndirme başarılı! Kütüphaneye ekleniyor...")
+		print("Download successful! Adding to library...")
 		var was_empty = tracks.is_empty()
 		
 		await _scan_folder_recursive(dl_dir)
@@ -440,23 +445,36 @@ func _on_download_finished(exit_code: int, output: Array, dl_dir: String) -> voi
 		
 		if was_empty and not tracks.is_empty():
 			_load_track(0)
+		else:
+			# Revert to standard UI text if nothing was playing before
+			if audio_player.stream == null:
+				track_name.text = "Cadenza"
+				artist_name.text = "Add a track"
+				needs_marquee = false
 	else:
-		print("İndirme başarısız! Hata kodu: ", exit_code)
+		var error_msg = "Download failed!\nCheck your connection and the link."
+		OS.alert(error_msg, "Download Error")
+		print("Download failed! Error code: ", exit_code)
 		if output.size() > 0: print(output[0])
+		
+		if audio_player.stream == null:
+			track_name.text = "Cadenza"
+			artist_name.text = "Add a track"
+			needs_marquee = false
 
 
-# ── AKILLI YEREL MEDYA SEÇİCİ ──────────────────────────────────────────
+# ── SMART LOCAL MEDIA PICKER ─────────────────────────────────────────────
 func _on_smart_local_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			DisplayServer.file_dialog_show(
-				"MP3 Dosyalarını Seç", "", "", false, 
+				"Select MP3 Files", "", "", false, 
 				DisplayServer.FILE_DIALOG_MODE_OPEN_FILES, 
 				PackedStringArray(["*.mp3"]), _on_native_files_selected
 			)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			DisplayServer.file_dialog_show(
-				"Müzik Klasörünü Seç", "", "", false, 
+				"Select Music Folder", "", "", false, 
 				DisplayServer.FILE_DIALOG_MODE_OPEN_DIR, 
 				PackedStringArray(), _on_native_folder_selected
 			)
@@ -477,7 +495,7 @@ func _on_native_folder_selected(status: bool, selected_paths: PackedStringArray,
 	if was_empty and not tracks.is_empty(): _load_track(0)
 
 
-# ── Anti-Donma (Anti-Freeze) Klasör Tarayıcı ───────────────────────────
+# ── Anti-Freeze Recursive Folder Scanner ─────────────────────────────────
 func _scan_folder_recursive(path: String) -> void:
 	var dir = DirAccess.open(path)
 	if dir == null: return
@@ -498,13 +516,14 @@ func _scan_folder_recursive(path: String) -> void:
 			if not tracks.has(full_path): tracks.append(full_path)
 		
 		iterations += 1
+		# Yield every 50 iterations to prevent main thread blocking (UI freezing)
 		if iterations % 50 == 0: await get_tree().process_frame
 		file_name = dir.get_next()
 		
 	dir.list_dir_end()
 
 
-# ── Liste ve Sürükle-Bırak Yönetimi ────────────────────────────────────
+# ── Playlist & Drag-and-Drop Management ──────────────────────────────────
 func _on_files_dropped(files: PackedStringArray) -> void:
 	var was_empty = tracks.is_empty()
 	for path in files:
@@ -531,7 +550,7 @@ func _on_remove_pressed() -> void:
 		audio_player.stop()
 		_refresh_play_button()
 		track_name.text  = "Cadenza"
-		artist_name.text = "Bir parça ekle"
+		artist_name.text = "Add a track"
 		total_label.text = "00:00"
 		needs_marquee = false
 		DisplayServer.window_set_title("Cadenza")
@@ -545,7 +564,7 @@ func _refresh_playlist() -> void:
 		tracklist.add_item(basename)
 
 
-# ── Config ─────────────────────────────────────────────────────────────
+# ── Configuration (Save/Load State) ──────────────────────────────────────
 func _save_config() -> void:
 	var config = {
 		"volume":        volume_slider.value,
@@ -582,7 +601,7 @@ func _load_config() -> void:
 			_load_track(clamp(saved_index, 0, tracks.size() - 1), false)
 
 
-# ── Yardımcı ───────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────
 func _format_time(seconds: float) -> String:
 	var m: int = floori(seconds / 60.0)
 	var s: int = int(seconds) % 60
