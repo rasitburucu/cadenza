@@ -20,6 +20,11 @@ const MARQUEE_LIMIT: int        = 28
 enum RepeatMode { OFF, ALL, ONE }
 var repeat_mode: RepeatMode = RepeatMode.OFF
 
+# YouTube İndirme ve UI Değişkenleri
+var download_thread: Thread
+var yt_dialog: ConfirmationDialog
+var yt_line_edit: LineEdit
+
 # ── Texture önbelleği ──────────────────────────────────────────────────
 var _tex_play: Texture2D        = preload("res://assets/ui/graphics/PlayBtnFull.png")
 var _tex_stop: Texture2D        = preload("res://assets/ui/graphics/StopBtnFull.png")
@@ -87,7 +92,6 @@ func _ready() -> void:
 
 
 func _setup_signals() -> void:
-	# Tüm sinyaller tek bir fonksiyonda toplandı. Spagetti kod engellendi.
 	minimize_btn.pressed.connect(_on_minimize)
 	close_btn.pressed.connect(_on_close)
 	
@@ -108,16 +112,18 @@ func _setup_signals() -> void:
 	volume_slider.gui_input.connect(_on_volume_scroll)
 	mute_btn.pressed.connect(_on_mute_pressed)
 
-	add_file_btn.pressed.connect(_on_add_file_pressed)
-	add_folder_btn.pressed.connect(_on_add_folder_pressed)
+	# Akıllı Butonlar
+	add_file_btn.pressed.connect(_on_youtube_smart_pressed)
+	add_folder_btn.gui_input.connect(_on_smart_local_input)
 	remove_btn.pressed.connect(_on_remove_pressed)
+	
+	# Tracklist - Tek ve Çift tık desteği
 	tracklist.item_activated.connect(_on_track_activated)
 	tracklist.item_selected.connect(_on_track_activated)
 
 
 # ── Sürekli Akış (Frame-based Update & Marquee) ────────────────────────
 func _process(delta: float) -> void:
-	# Marquee Efekti
 	if needs_marquee:
 		marquee_timer += delta
 		if marquee_timer >= MARQUEE_SPEED:
@@ -125,7 +131,6 @@ func _process(delta: float) -> void:
 			var current_text = track_name.text
 			track_name.text = current_text.substr(1, current_text.length() - 1) + current_text[0]
 
-	# Seek Slider Güncellemesi
 	if audio_player.stream == null:
 		return
 		
@@ -190,19 +195,16 @@ func _unhandled_input(event: InputEvent) -> void:
 				audio_player.seek(pos)
 		KEY_M:
 			_on_mute_pressed()
-		KEY_T:
-			always_on_top = not always_on_top
-			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, always_on_top)
 
 
-# ── Pencere sürükleme ──────────────────────────────────────────────────
+# ── Pencere Sürükleme ──────────────────────────────────────────────────
 func _on_topbar_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			DisplayServer.window_start_drag()
 
 
-# ── Parça yükleme ──────────────────────────────────────────────────────
+# ── Parça Yükleme ──────────────────────────────────────────────────────
 func _load_track(index: int, autoplay: bool = true) -> void:
 	current_index = index
 	last_elapsed_sec = -1
@@ -264,48 +266,36 @@ func _on_play_pause_pressed() -> void:
 			_load_track(current_index)
 	_refresh_play_button()
 
-
 func _on_prev_pressed() -> void:
-	if tracks.is_empty():
-		return
+	if tracks.is_empty(): return
 	if audio_player.get_playback_position() > 3.0:
 		audio_player.seek(0.0)
 	else:
 		_load_track((current_index - 1 + tracks.size()) % tracks.size())
 
-
 func _on_next_pressed() -> void:
-	if not tracks.is_empty():
-		_play_next(true)
-
+	if not tracks.is_empty(): _play_next(true)
 
 func _on_track_finished() -> void:
 	_play_next(false)
 
-
 func _play_next(force_next: bool = false) -> void:
 	if force_next:
-		if shuffle_on:
-			_load_track(randi() % tracks.size())
-		else:
-			_load_track((current_index + 1) % tracks.size())
+		if shuffle_on: _load_track(randi() % tracks.size())
+		else: _load_track((current_index + 1) % tracks.size())
 		return
 
 	match repeat_mode:
 		RepeatMode.ONE:
 			_load_track(current_index)
 		RepeatMode.ALL:
-			if shuffle_on:
-				_load_track(randi() % tracks.size())
-			else:
-				_load_track((current_index + 1) % tracks.size())
+			if shuffle_on: _load_track(randi() % tracks.size())
+			else: _load_track((current_index + 1) % tracks.size())
 		RepeatMode.OFF:
-			if shuffle_on:
-				_load_track(randi() % tracks.size())
+			if shuffle_on: _load_track(randi() % tracks.size())
 			else:
 				var next = current_index + 1
-				if next < tracks.size():
-					_load_track(next)
+				if next < tracks.size(): _load_track(next)
 				else:
 					audio_player.stop()
 					_refresh_play_button()
@@ -315,11 +305,9 @@ func _play_next(force_next: bool = false) -> void:
 func _on_seek_drag_started() -> void:
 	user_dragging = true
 
-
 func _on_seek_drag_ended(_value_changed: bool) -> void:
 	user_dragging = false
-	if audio_player.stream == null:
-		return
+	if audio_player.stream == null: return
 	var total    = audio_player.stream.get_length()
 	var seek_pos = (seek_slider.value / 100.0) * total
 	audio_player.seek(seek_pos)
@@ -332,15 +320,12 @@ func _on_volume_changed(value: float) -> void:
 	if not is_muted:
 		audio_player.volume_db = linear_to_db(value / 100.0)
 
-
 func _on_volume_scroll(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		if event.pressed:
-			if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-				volume_slider.value = min(100.0, volume_slider.value + 5.0)
-			elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-				volume_slider.value = max(0.0, volume_slider.value - 5.0)
-
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			volume_slider.value = min(100.0, volume_slider.value + 5.0)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			volume_slider.value = max(0.0, volume_slider.value - 5.0)
 
 func _on_mute_pressed() -> void:
 	is_muted = not is_muted
@@ -359,82 +344,143 @@ func _on_shuffle_pressed() -> void:
 	shuffle_on = not shuffle_on
 	shuffle_btn.texture_normal = _tex_shuffle_on if shuffle_on else _tex_shuffle_off
 
-
 func _on_repeat_pressed() -> void:
 	repeat_mode = ((repeat_mode + 1) % 3) as RepeatMode
 	_refresh_repeat_button()
 
 
-# ── Native Playlist & Sürükle-Bırak ────────────────────────────────────
-func _on_files_dropped(files: PackedStringArray) -> void:
-	var was_empty = tracks.is_empty()
-	for path in files:
-		var dir = DirAccess.open(path)
-		if dir != null:
-			await _scan_folder_recursive(path) # Donmayı engellemek için await eklendi
-		elif path.to_lower().ends_with(".mp3"):
-			if not tracks.has(path):
-				tracks.append(path)
-				
-	_refresh_playlist()
-	if was_empty and not tracks.is_empty():
-		_load_track(0)
+# ── YOUTUBE PANO (CLIPBOARD) VE İNDİRME MOTORU ─────────────────────────
+func _get_base_dir() -> String:
+	# Eğer uygulaman Godot Editörünün içinde çalışıyorsa (Test)
+	if OS.has_feature("editor"):
+		return ProjectSettings.globalize_path("res://")
+	# Eğer uygulaman Editörde DEĞİLSE (Yani bir .exe isek)
+	else:
+		return OS.get_executable_path().get_base_dir()
+
+func _on_youtube_smart_pressed() -> void:
+	var clipboard_text = DisplayServer.clipboard_get().strip_edges()
+	
+	if clipboard_text.begins_with("https://www.youtube.com/") or clipboard_text.begins_with("https://youtu.be/"):
+		_start_youtube_download(clipboard_text)
+	else:
+		_show_youtube_popup()
+
+func _show_youtube_popup() -> void:
+	if yt_dialog == null:
+		yt_dialog = ConfirmationDialog.new()
+		yt_dialog.title = "YouTube'dan İndir"
+		yt_dialog.dialog_text = "Videonun linkini yapıştırın:"
+		yt_dialog.confirmed.connect(_on_youtube_popup_confirmed)
+		
+		yt_line_edit = LineEdit.new()
+		yt_line_edit.placeholder_text = "https://www.youtube.com/..."
+		yt_line_edit.custom_minimum_size.x = 300
+		yt_dialog.add_child(yt_line_edit)
+		
+		add_child(yt_dialog)
+	
+	yt_line_edit.text = ""
+	yt_dialog.popup_centered()
+	yt_line_edit.grab_focus()
+
+func _on_youtube_popup_confirmed() -> void:
+	var url = yt_line_edit.text.strip_edges()
+	if url != "":
+		_start_youtube_download(url)
+
+func _start_youtube_download(url: String) -> void:
+	if download_thread != null and download_thread.is_alive():
+		print("Zaten bir indirme işlemi sürüyor!")
+		return
+		
+	var base_dir = _get_base_dir()
+	var bin_dir = base_dir + "/bin"
+	var dl_dir = base_dir + "/downloads"
+	
+	var dir = DirAccess.open(base_dir)
+	if not dir.dir_exists(dl_dir):
+		dir.make_dir("downloads")
+		
+	var ytdlp_path = bin_dir + "/yt-dlp.exe"
+	
+	# İŞTE BURASI KÖR UÇUŞU BİTİREN VE HATAYI EKRANA BASAN KISIM
+	if not FileAccess.file_exists(ytdlp_path):
+		var error_msg = "KRİTİK HATA: yt-dlp.exe bulunamadı!\nŞu klasörde arandı: " + ytdlp_path
+		OS.alert(error_msg, "Eksik Dosya veya Klasör")
+		return
+
+	print("İndirme başladı: ", url)
+	download_thread = Thread.new()
+	download_thread.start(_run_ytdlp_thread.bind(ytdlp_path, bin_dir, dl_dir, url))
+
+func _run_ytdlp_thread(ytdlp_path: String, bin_dir: String, dl_dir: String, url: String) -> void:
+	var args = [
+		"--ffmpeg-location", bin_dir,
+		"-x", 
+		"--audio-format", "mp3", 
+		"--audio-quality", "0", 
+		"--output", dl_dir + "/%(title)s.%(ext)s", 
+		"--no-playlist", 
+		url
+	]
+	var output = []
+	var exit_code = OS.execute(ytdlp_path, args, output, true)
+	call_deferred("_on_download_finished", exit_code, output, dl_dir)
+
+func _on_download_finished(exit_code: int, output: Array, dl_dir: String) -> void:
+	download_thread.wait_to_finish()
+	
+	if exit_code == 0:
+		print("İndirme başarılı! Kütüphaneye ekleniyor...")
+		var was_empty = tracks.is_empty()
+		
+		await _scan_folder_recursive(dl_dir)
+		_refresh_playlist()
+		
+		if was_empty and not tracks.is_empty():
+			_load_track(0)
+	else:
+		print("İndirme başarısız! Hata kodu: ", exit_code)
+		if output.size() > 0: print(output[0])
 
 
-func _on_add_file_pressed() -> void:
-	# Native Windows penceresi
-	DisplayServer.file_dialog_show(
-		"Müzik Dosyalarını Seç", 
-		"", 
-		"", 
-		false, 
-		DisplayServer.FILE_DIALOG_MODE_OPEN_FILES, 
-		PackedStringArray(["*.mp3"]), 
-		_on_native_files_selected
-	)
-
-
-func _on_add_folder_pressed() -> void:
-	DisplayServer.file_dialog_show(
-		"Klasör Seç", 
-		"", 
-		"", 
-		false, 
-		DisplayServer.FILE_DIALOG_MODE_OPEN_DIR, 
-		PackedStringArray(), 
-		_on_native_folder_selected
-	)
-
+# ── AKILLI YEREL MEDYA SEÇİCİ ──────────────────────────────────────────
+func _on_smart_local_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			DisplayServer.file_dialog_show(
+				"MP3 Dosyalarını Seç", "", "", false, 
+				DisplayServer.FILE_DIALOG_MODE_OPEN_FILES, 
+				PackedStringArray(["*.mp3"]), _on_native_files_selected
+			)
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			DisplayServer.file_dialog_show(
+				"Müzik Klasörünü Seç", "", "", false, 
+				DisplayServer.FILE_DIALOG_MODE_OPEN_DIR, 
+				PackedStringArray(), _on_native_folder_selected
+			)
 
 func _on_native_files_selected(status: bool, selected_paths: PackedStringArray, _filter_index: int) -> void:
-	if not status or selected_paths.is_empty():
-		return
-		
+	if not status or selected_paths.is_empty(): return
 	var was_empty = tracks.is_empty()
 	for path in selected_paths:
-		if not tracks.has(path):
-			tracks.append(path)
+		if not tracks.has(path): tracks.append(path)
 	_refresh_playlist()
-	if was_empty and not tracks.is_empty():
-		_load_track(0)
-
+	if was_empty and not tracks.is_empty(): _load_track(0)
 
 func _on_native_folder_selected(status: bool, selected_paths: PackedStringArray, _filter_index: int) -> void:
-	if not status or selected_paths.is_empty():
-		return
-		
+	if not status or selected_paths.is_empty(): return
 	var was_empty = tracks.is_empty()
 	await _scan_folder_recursive(selected_paths[0])
 	_refresh_playlist()
-	if was_empty and not tracks.is_empty():
-		_load_track(0)
+	if was_empty and not tracks.is_empty(): _load_track(0)
 
 
 # ── Anti-Donma (Anti-Freeze) Klasör Tarayıcı ───────────────────────────
 func _scan_folder_recursive(path: String) -> void:
 	var dir = DirAccess.open(path)
-	if dir == null:
-		return
+	if dir == null: return
 		
 	dir.list_dir_begin()
 	var file_name = dir.get_next()
@@ -449,30 +495,38 @@ func _scan_folder_recursive(path: String) -> void:
 		if dir.current_is_dir():
 			await _scan_folder_recursive(full_path)
 		elif file_name.to_lower().ends_with(".mp3"):
-			if not tracks.has(full_path):
-				tracks.append(full_path)
+			if not tracks.has(full_path): tracks.append(full_path)
 		
 		iterations += 1
-		# Her 50 dosyada bir UI thread'ine nefes aldırıyoruz. Çökme engellendi.
-		if iterations % 50 == 0:
-			await get_tree().process_frame
-			
+		if iterations % 50 == 0: await get_tree().process_frame
 		file_name = dir.get_next()
 		
 	dir.list_dir_end()
 
 
+# ── Liste ve Sürükle-Bırak Yönetimi ────────────────────────────────────
+func _on_files_dropped(files: PackedStringArray) -> void:
+	var was_empty = tracks.is_empty()
+	for path in files:
+		var dir = DirAccess.open(path)
+		if dir != null:
+			await _scan_folder_recursive(path)
+		elif path.to_lower().ends_with(".mp3"):
+			if not tracks.has(path): tracks.append(path)
+				
+	_refresh_playlist()
+	if was_empty and not tracks.is_empty(): _load_track(0)
+
 func _on_track_activated(index: int) -> void:
 	_load_track(index)
 
-
 func _on_remove_pressed() -> void:
 	var selected = tracklist.get_selected_items()
-	if selected.is_empty():
-		return
+	if selected.is_empty(): return
 	var index = selected[0]
 	tracks.remove_at(index)
 	_refresh_playlist()
+	
 	if index == current_index:
 		audio_player.stop()
 		_refresh_play_button()
@@ -483,7 +537,6 @@ func _on_remove_pressed() -> void:
 		DisplayServer.window_set_title("Cadenza")
 	elif index < current_index:
 		current_index -= 1
-
 
 func _refresh_playlist() -> void:
 	tracklist.clear()
@@ -505,31 +558,24 @@ func _save_config() -> void:
 	file.store_string(JSON.stringify(config))
 	file.close()
 
-
 func _load_config() -> void:
-	if not FileAccess.file_exists("user://config.json"):
-		return
+	if not FileAccess.file_exists("user://config.json"): return
 	var file = FileAccess.open("user://config.json", FileAccess.READ)
 	var data = JSON.parse_string(file.get_as_text())
 	file.close()
-	if data == null:
-		return
+	if data == null: return
 
-	if data.has("volume"):
-		volume_slider.value = data["volume"]
-
+	if data.has("volume"): volume_slider.value = data["volume"]
 	if data.has("shuffle"):
 		shuffle_on = data["shuffle"]
 		shuffle_btn.texture_normal = _tex_shuffle_on if shuffle_on else _tex_shuffle_off
-
 	if data.has("repeat_mode"):
 		repeat_mode = int(data["repeat_mode"]) as RepeatMode
 		_refresh_repeat_button()
 
 	if data.has("last_playlist"):
 		for path in data["last_playlist"]:
-			if FileAccess.file_exists(path):
-				tracks.append(path)
+			if FileAccess.file_exists(path): tracks.append(path)
 		_refresh_playlist()
 		if not tracks.is_empty():
 			var saved_index = int(data.get("last_index", 0))
@@ -542,15 +588,12 @@ func _format_time(seconds: float) -> String:
 	var s: int = int(seconds) % 60
 	return "%02d:%02d" % [m, s]
 
-
 func _on_minimize() -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MINIMIZED)
-
 
 func _on_close() -> void:
 	_save_config()
 	get_tree().quit()
-
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
