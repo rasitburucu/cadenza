@@ -31,8 +31,6 @@ var _tex_repeat_off: Texture2D
 
 # ── Node referansları ──────────────────────────────────────────────────
 @onready var audio_player   = $AudioStreamPlayer
-@onready var file_dialog    = $FileDialog
-@onready var folder_dialog  = $FolderDialog
 
 @onready var seek_slider    = $PlayerBackground/MainLayout/SeekBar/SeekSlider
 @onready var elapsed_label  = $PlayerBackground/MainLayout/SeekBar/ElapsedLabel
@@ -66,69 +64,11 @@ func _ready() -> void:
 	_tex_shuffle_off = shuffle_btn.texture_normal
 	_tex_repeat_off  = repeat_btn.texture_normal
 
-	# Pencere kontrolleri
-	minimize_btn.pressed.connect(_on_minimize)
-	close_btn.pressed.connect(_on_close)
-
-	# TopBar sürükleme
-	var topbar = $PlayerBackground/MainLayout/TopBar
-	topbar.gui_input.connect(_on_topbar_input)
-	
-	# Sürükle-Bırak Entegrasyonu
-	get_window().files_dropped.connect(_on_files_dropped)
-
-	# Playback bağlantıları
-	if not play_pause_btn.pressed.is_connected(_on_play_pause_pressed):
-		play_pause_btn.pressed.connect(_on_play_pause_pressed)
-	if not prev_btn.pressed.is_connected(_on_prev_pressed):
-		prev_btn.pressed.connect(_on_prev_pressed)
-	if not next_btn.pressed.is_connected(_on_next_pressed):
-		next_btn.pressed.connect(_on_next_pressed)
-	if not shuffle_btn.pressed.is_connected(_on_shuffle_pressed):
-		shuffle_btn.pressed.connect(_on_shuffle_pressed)
-	if not repeat_btn.pressed.is_connected(_on_repeat_pressed):
-		repeat_btn.pressed.connect(_on_repeat_pressed)
-	if not audio_player.finished.is_connected(_on_track_finished):
-		audio_player.finished.connect(_on_track_finished)
-
-	# Seek ayarları
-	if not seek_slider.drag_started.is_connected(_on_seek_drag_started):
-		seek_slider.drag_started.connect(_on_seek_drag_started)
-	if not seek_slider.drag_ended.is_connected(_on_seek_drag_ended):
-		seek_slider.drag_ended.connect(_on_seek_drag_ended)
-	seek_slider.max_value = 100.0
-	seek_slider.step = 0.01
-
-	# Volume ayarları
-	if not volume_slider.value_changed.is_connected(_on_volume_changed):
-		volume_slider.value_changed.connect(_on_volume_changed)
-	if not mute_btn.pressed.is_connected(_on_mute_pressed):
-		mute_btn.pressed.connect(_on_mute_pressed)
-	volume_slider.value = 80.0
-
-	# Playlist bağlantıları
-	if not add_file_btn.pressed.is_connected(_on_add_file_pressed):
-		add_file_btn.pressed.connect(_on_add_file_pressed)
-	if not add_folder_btn.pressed.is_connected(_on_add_folder_pressed):
-		add_folder_btn.pressed.connect(_on_add_folder_pressed)
-	if not remove_btn.pressed.is_connected(_on_remove_pressed):
-		remove_btn.pressed.connect(_on_remove_pressed)
-	if not tracklist.item_activated.is_connected(_on_track_activated):
-		tracklist.item_activated.connect(_on_track_activated)
-
-	# Filtreler ve UI Input
-	file_dialog.filters     = PackedStringArray(["*.mp3 ; MP3 Files"])
-	file_dialog.file_mode   = FileDialog.FILE_MODE_OPEN_FILES
-	folder_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
-	if not volume_slider.gui_input.is_connected(_on_volume_scroll):
-		volume_slider.gui_input.connect(_on_volume_scroll)
-
-	# ── UI TAŞMA (OVERFLOW) DÜZELTMESİ ─────────────────────────────────────
+	# UI TAŞMA (OVERFLOW) DÜZELTMESİ
 	track_name.clip_text = true
 	artist_name.clip_text = true
 	track_name.custom_minimum_size.x = 1
 	artist_name.custom_minimum_size.x = 1
-	# ───────────────────────────────────────────────────────────────────────
 
 	# Başlangıç UI
 	elapsed_label.text = "00:00"
@@ -136,9 +76,43 @@ func _ready() -> void:
 	track_name.text    = "Cadenza"
 	artist_name.text   = "Bir parça ekle"
 	DisplayServer.window_set_title("Cadenza")
+	
+	seek_slider.max_value = 100.0
+	seek_slider.step = 0.01
+	volume_slider.value = 80.0
 
+	_setup_signals()
 	_bind_button_animations()
 	_load_config()
+
+
+func _setup_signals() -> void:
+	# Tüm sinyaller tek bir fonksiyonda toplandı. Spagetti kod engellendi.
+	minimize_btn.pressed.connect(_on_minimize)
+	close_btn.pressed.connect(_on_close)
+	
+	$PlayerBackground/MainLayout/TopBar.gui_input.connect(_on_topbar_input)
+	get_window().files_dropped.connect(_on_files_dropped)
+
+	play_pause_btn.pressed.connect(_on_play_pause_pressed)
+	prev_btn.pressed.connect(_on_prev_pressed)
+	next_btn.pressed.connect(_on_next_pressed)
+	shuffle_btn.pressed.connect(_on_shuffle_pressed)
+	repeat_btn.pressed.connect(_on_repeat_pressed)
+	audio_player.finished.connect(_on_track_finished)
+
+	seek_slider.drag_started.connect(_on_seek_drag_started)
+	seek_slider.drag_ended.connect(_on_seek_drag_ended)
+
+	volume_slider.value_changed.connect(_on_volume_changed)
+	volume_slider.gui_input.connect(_on_volume_scroll)
+	mute_btn.pressed.connect(_on_mute_pressed)
+
+	add_file_btn.pressed.connect(_on_add_file_pressed)
+	add_folder_btn.pressed.connect(_on_add_folder_pressed)
+	remove_btn.pressed.connect(_on_remove_pressed)
+	tracklist.item_activated.connect(_on_track_activated)
+	tracklist.item_selected.connect(_on_track_activated)
 
 
 # ── Sürekli Akış (Frame-based Update & Marquee) ────────────────────────
@@ -391,13 +365,13 @@ func _on_repeat_pressed() -> void:
 	_refresh_repeat_button()
 
 
-# ── Playlist & Sürükle-Bırak ───────────────────────────────────────────
+# ── Native Playlist & Sürükle-Bırak ────────────────────────────────────
 func _on_files_dropped(files: PackedStringArray) -> void:
 	var was_empty = tracks.is_empty()
 	for path in files:
 		var dir = DirAccess.open(path)
 		if dir != null:
-			_scan_folder_recursive(path)
+			await _scan_folder_recursive(path) # Donmayı engellemek için await eklendi
 		elif path.to_lower().ends_with(".mp3"):
 			if not tracks.has(path):
 				tracks.append(path)
@@ -408,16 +382,36 @@ func _on_files_dropped(files: PackedStringArray) -> void:
 
 
 func _on_add_file_pressed() -> void:
-	file_dialog.popup_centered(Vector2(800, 600))
+	# Native Windows penceresi
+	DisplayServer.file_dialog_show(
+		"Müzik Dosyalarını Seç", 
+		"", 
+		"", 
+		false, 
+		DisplayServer.FILE_DIALOG_MODE_OPEN_FILES, 
+		PackedStringArray(["*.mp3"]), 
+		_on_native_files_selected
+	)
 
 
 func _on_add_folder_pressed() -> void:
-	folder_dialog.popup_centered(Vector2(800, 600))
+	DisplayServer.file_dialog_show(
+		"Klasör Seç", 
+		"", 
+		"", 
+		false, 
+		DisplayServer.FILE_DIALOG_MODE_OPEN_DIR, 
+		PackedStringArray(), 
+		_on_native_folder_selected
+	)
 
 
-func _on_file_dialog_files_selected(paths: PackedStringArray) -> void:
+func _on_native_files_selected(status: bool, selected_paths: PackedStringArray, _filter_index: int) -> void:
+	if not status or selected_paths.is_empty():
+		return
+		
 	var was_empty = tracks.is_empty()
-	for path in paths:
+	for path in selected_paths:
 		if not tracks.has(path):
 			tracks.append(path)
 	_refresh_playlist()
@@ -425,20 +419,27 @@ func _on_file_dialog_files_selected(paths: PackedStringArray) -> void:
 		_load_track(0)
 
 
-func _on_folder_dialog_dir_selected(path: String) -> void:
+func _on_native_folder_selected(status: bool, selected_paths: PackedStringArray, _filter_index: int) -> void:
+	if not status or selected_paths.is_empty():
+		return
+		
 	var was_empty = tracks.is_empty()
-	_scan_folder_recursive(path)
+	await _scan_folder_recursive(selected_paths[0])
 	_refresh_playlist()
 	if was_empty and not tracks.is_empty():
 		_load_track(0)
 
 
+# ── Anti-Donma (Anti-Freeze) Klasör Tarayıcı ───────────────────────────
 func _scan_folder_recursive(path: String) -> void:
 	var dir = DirAccess.open(path)
 	if dir == null:
 		return
+		
 	dir.list_dir_begin()
 	var file_name = dir.get_next()
+	var iterations = 0
+	
 	while file_name != "":
 		if file_name == "." or file_name == "..":
 			file_name = dir.get_next()
@@ -446,12 +447,18 @@ func _scan_folder_recursive(path: String) -> void:
 			
 		var full_path = path + "/" + file_name
 		if dir.current_is_dir():
-			_scan_folder_recursive(full_path)
+			await _scan_folder_recursive(full_path)
 		elif file_name.to_lower().ends_with(".mp3"):
 			if not tracks.has(full_path):
 				tracks.append(full_path)
-				
+		
+		iterations += 1
+		# Her 50 dosyada bir UI thread'ine nefes aldırıyoruz. Çökme engellendi.
+		if iterations % 50 == 0:
+			await get_tree().process_frame
+			
 		file_name = dir.get_next()
+		
 	dir.list_dir_end()
 
 
